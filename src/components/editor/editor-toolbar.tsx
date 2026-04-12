@@ -9,8 +9,8 @@ import {
   FilePdf,
   ClockCounterClockwise,
   Play,
+  FileDoc,
 } from "@phosphor-icons/react";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
 interface EditorToolbarProps {
@@ -20,33 +20,41 @@ interface EditorToolbarProps {
   onStash: () => void;
   onPopStash: () => void;
   onExportPdf: () => void;
+  onExportDocx: () => void;
   onCompile: () => void;
+  onToggleHistory: () => void;
+  showHistory: boolean;
 }
 
 export function EditorToolbar({
-  resumeId,
   hasStash,
   onCommit,
   onStash,
   onPopStash,
   onExportPdf,
+  onExportDocx,
   onCompile,
+  onToggleHistory,
+  showHistory,
 }: EditorToolbarProps) {
   return (
-    <div className="flex items-center gap-1 px-3 py-2 bg-[#1c1c1c] border-b border-[#2e2e2e]">
+    <div className="flex items-center gap-1 px-3 py-2 bg-[var(--surface-card)] border-b border-[var(--surface-border)] shrink-0">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 text-[#ededed] hover:bg-[#2e2e2e]"
+            className="h-8 gap-1.5 text-[var(--surface-text)] hover:bg-[var(--surface-border)]"
             onClick={onCommit}
           >
             <GitCommit size={16} />
             <span className="hidden sm:inline">Commit</span>
+            <kbd className="hidden lg:inline-flex items-center ml-1 text-[10px] text-[var(--surface-text-muted)] bg-[var(--surface-border)] px-1 rounded">
+              Ctrl+S
+            </kbd>
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Save a snapshot of your work</TooltipContent>
+        <TooltipContent>Save a snapshot (Ctrl+S)</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -54,14 +62,17 @@ export function EditorToolbar({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 text-[#ededed] hover:bg-[#2e2e2e]"
+            className="h-8 gap-1.5 text-[var(--surface-text)] hover:bg-[var(--surface-border)]"
             onClick={onStash}
           >
             <Archive size={16} />
             <span className="hidden sm:inline">Stash</span>
+            <kbd className="hidden lg:inline-flex items-center ml-1 text-[10px] text-[var(--surface-text-muted)] bg-[var(--surface-border)] px-1 rounded">
+              Ctrl+Shift+S
+            </kbd>
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Stash current changes and revert to last commit</TooltipContent>
+        <TooltipContent>Stash changes and revert (Ctrl+Shift+S)</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -69,14 +80,14 @@ export function EditorToolbar({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 text-[#ededed] hover:bg-[#2e2e2e]"
+            className="h-8 gap-1.5 text-[var(--surface-text)] hover:bg-[var(--surface-border)]"
             onClick={onPopStash}
             disabled={!hasStash}
           >
             <ArrowCounterClockwise size={16} />
             <span className="hidden sm:inline">Pop Stash</span>
             {hasStash && (
-              <Badge variant="secondary" className="h-4 px-1 text-[10px] bg-[#3ECF8E]/20 text-[#3ECF8E] border-0">
+              <Badge variant="secondary" className="h-4 px-1 text-[10px] bg-[var(--accent-color)]/20 text-[var(--accent-color)] border-0">
                 1
               </Badge>
             )}
@@ -85,13 +96,13 @@ export function EditorToolbar({
         <TooltipContent>Restore stashed changes</TooltipContent>
       </Tooltip>
 
-      <div className="w-px h-5 bg-[#2e2e2e] mx-1" />
+      <div className="w-px h-5 bg-[var(--surface-border)] mx-1" />
 
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             size="sm"
-            className="h-8 gap-1.5 bg-[#3ECF8E] hover:bg-[#35b87c] text-[#171717] font-medium"
+            className="h-8 gap-1.5 bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-[#171717] font-medium"
             onClick={onCompile}
           >
             <Play size={16} weight="fill" />
@@ -108,11 +119,11 @@ export function EditorToolbar({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 text-[#ededed] hover:bg-[#2e2e2e]"
+            className="h-8 gap-1.5 text-[var(--surface-text)] hover:bg-[var(--surface-border)]"
             onClick={onExportPdf}
           >
             <FilePdf size={16} />
-            <span className="hidden sm:inline">Export PDF</span>
+            <span className="hidden sm:inline">PDF</span>
           </Button>
         </TooltipTrigger>
         <TooltipContent>Print resume as PDF</TooltipContent>
@@ -120,18 +131,34 @@ export function EditorToolbar({
 
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link href={`/resume/${resumeId}/history`}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1.5 text-[#ededed] hover:bg-[#2e2e2e]"
-            >
-              <ClockCounterClockwise size={16} />
-              <span className="hidden sm:inline">History</span>
-            </Button>
-          </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-[var(--surface-text)] hover:bg-[var(--surface-border)]"
+            onClick={onExportDocx}
+          >
+            <FileDoc size={16} />
+            <span className="hidden sm:inline">Word</span>
+          </Button>
         </TooltipTrigger>
-        <TooltipContent>View commit history</TooltipContent>
+        <TooltipContent>Export as Word document</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-8 gap-1.5 hover:bg-[var(--surface-border)] ${
+              showHistory ? "text-[var(--accent-color)] bg-[var(--accent-color)]/10" : "text-[var(--surface-text)]"
+            }`}
+            onClick={onToggleHistory}
+          >
+            <ClockCounterClockwise size={16} />
+            <span className="hidden sm:inline">History</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Toggle commit history sidebar</TooltipContent>
       </Tooltip>
     </div>
   );

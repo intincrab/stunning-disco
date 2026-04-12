@@ -30,15 +30,15 @@ export function ResumeCard({ resume, commitCount, lastUpdated, onDelete, onUploa
   };
 
   return (
-    <Card className="group bg-[#1c1c1c] border-[#2e2e2e] hover:border-[#3ECF8E] transition-colors">
+    <Card className="group bg-[var(--surface-card)] border-[var(--surface-border)] hover:border-[var(--accent-color)] transition-colors">
       <Link href={`/resume/${resume.id}`}>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-[#ededed] truncate">
+          <CardTitle className="text-base font-semibold text-[var(--surface-text)] truncate">
             {resume.name}
           </CardTitle>
         </CardHeader>
         <CardContent className="pb-3">
-          <div className="flex items-center gap-3 text-xs text-[#a1a1a1]">
+          <div className="flex items-center gap-3 text-xs text-[var(--surface-text-secondary)]">
             <span className="flex items-center gap-1">
               <GitCommit size={14} />
               {commitCount} commit{commitCount !== 1 ? "s" : ""}
@@ -58,7 +58,7 @@ export function ResumeCard({ resume, commitCount, lastUpdated, onDelete, onUploa
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 text-xs text-[#a1a1a1] hover:text-[#ededed]"
+          className="h-7 text-xs text-[var(--surface-text-secondary)] hover:text-[var(--surface-text)]"
           onClick={(e) => {
             e.preventDefault();
             fileInputRef.current?.click();
@@ -70,7 +70,7 @@ export function ResumeCard({ resume, commitCount, lastUpdated, onDelete, onUploa
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 text-xs text-[#a1a1a1] hover:text-red-400 ml-auto"
+          className="h-7 text-xs text-[var(--surface-text-secondary)] hover:text-red-400 ml-auto"
           onClick={(e) => {
             e.preventDefault();
             onDelete(resume.id);

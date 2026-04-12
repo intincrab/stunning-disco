@@ -2,6 +2,9 @@
   "name": "resumegit-temp",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "resumegit": "./cli/resumegit.mjs"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -25,6 +28,8 @@
     "clsx": "^2.1.1",
     "diff": "^8.0.4",
     "diff2html": "^3.4.56",
+    "docx": "^9.6.1",
+    "file-saver": "^2.0.5",
     "geist": "^1.7.0",
     "lucide-react": "^1.8.0",
     "next": "14.2.35",
@@ -38,6 +43,7 @@
   },
   "devDependencies": {
     "@types/diff": "^7.0.2",
+    "@types/file-saver": "^2.0.7",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

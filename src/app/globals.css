@@ -4,26 +4,37 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    /* Light mode — Supabase-inspired greens on white */
+    --background: 0 0% 98%;
+    --foreground: 0 0% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 0 0% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
+    --popover-foreground: 0 0% 9%;
+    --primary: 153 58% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 10% 94%;
     --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
+    --muted: 150 10% 94%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 150 10% 94%;
     --accent-foreground: 0 0% 9%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 153 58% 53%;
     --radius: 0.5rem;
+
+    /* Light Supabase surface colors */
+    --surface-bg: #f8f8f8;
+    --surface-card: #ffffff;
+    --surface-border: #e0e0e0;
+    --surface-text: #1c1c1c;
+    --surface-text-secondary: #666666;
+    --surface-text-muted: #999999;
+    --accent-color: #3ECF8E;
+    --accent-hover: #35b87c;
   }
 
   .dark {
@@ -46,6 +57,15 @@
     --border: 0 0% 18%;
     --input: 0 0% 18%;
     --ring: 153 58% 53%;
+
+    --surface-bg: #171717;
+    --surface-card: #1c1c1c;
+    --surface-border: #2e2e2e;
+    --surface-text: #ededed;
+    --surface-text-secondary: #a1a1a1;
+    --surface-text-muted: #6b6b6b;
+    --accent-color: #3ECF8E;
+    --accent-hover: #35b87c;
   }
 }
 
@@ -58,55 +78,68 @@
   }
 }
 
-/* diff2html dark theme overrides */
+/* diff2html theme overrides — works for both light and dark */
 .d2h-wrapper {
   background: transparent !important;
 }
-.d2h-file-header {
-  background: #1c1c1c !important;
-  border-color: #2e2e2e !important;
-  color: #ededed !important;
+.dark .d2h-file-header {
+  background: var(--surface-card) !important;
+  border-color: var(--surface-border) !important;
+  color: var(--surface-text) !important;
 }
-.d2h-file-wrapper {
-  border-color: #2e2e2e !important;
+.dark .d2h-file-wrapper {
+  border-color: var(--surface-border) !important;
 }
-.d2h-code-line,
-.d2h-code-side-line {
-  background: #171717 !important;
-  color: #ededed !important;
+.dark .d2h-code-line,
+.dark .d2h-code-side-line {
+  background: var(--surface-bg) !important;
+  color: var(--surface-text) !important;
 }
-.d2h-code-line-ctn {
-  color: #ededed !important;
+.dark .d2h-code-line-ctn {
+  color: var(--surface-text) !important;
 }
-.d2h-del {
+.dark .d2h-del {
   background: rgba(248, 81, 73, 0.15) !important;
 }
-.d2h-ins {
+.dark .d2h-ins {
   background: rgba(62, 207, 142, 0.15) !important;
 }
-.d2h-del .d2h-code-line-ctn {
+.dark .d2h-del .d2h-code-line-ctn {
   background: rgba(248, 81, 73, 0.15) !important;
 }
-.d2h-ins .d2h-code-line-ctn {
+.dark .d2h-ins .d2h-code-line-ctn {
   background: rgba(62, 207, 142, 0.15) !important;
 }
-.d2h-code-linenumber {
-  background: #1c1c1c !important;
-  border-color: #2e2e2e !important;
-  color: #a1a1a1 !important;
+.dark .d2h-code-linenumber {
+  background: var(--surface-card) !important;
+  border-color: var(--surface-border) !important;
+  color: var(--surface-text-secondary) !important;
 }
-.d2h-info {
-  background: #1c1c1c !important;
-  color: #a1a1a1 !important;
-  border-color: #2e2e2e !important;
+.dark .d2h-info {
+  background: var(--surface-card) !important;
+  color: var(--surface-text-secondary) !important;
+  border-color: var(--surface-border) !important;
 }
-.d2h-emptyplaceholder {
-  background: #1c1c1c !important;
-  border-color: #2e2e2e !important;
+.dark .d2h-emptyplaceholder {
+  background: var(--surface-card) !important;
+  border-color: var(--surface-border) !important;
 }
-.d2h-tag {
-  background: #1c1c1c !important;
-  color: #a1a1a1 !important;
+.dark .d2h-tag {
+  background: var(--surface-card) !important;
+  color: var(--surface-text-secondary) !important;
+}
+.dark .d2h-file-side-diff {
+  background: var(--surface-bg) !important;
+}
+.dark .d2h-moved-tag {
+  background: var(--surface-card) !important;
+  color: var(--surface-text-secondary) !important;
+}
+.dark .d2h-file-diff .d2h-del.d2h-change {
+  background: rgba(248, 81, 73, 0.2) !important;
+}
+.dark .d2h-file-diff .d2h-ins.d2h-change {
+  background: rgba(62, 207, 142, 0.2) !important;
 }
 
 /* Print styles for PDF export */

@@ -29,7 +29,7 @@ export function DiffViewer({ oldText, newText, oldTitle, newTitle }: DiffViewerP
   }, [oldText, newText, oldTitle, newTitle]);
 
   return (
-    <div className="border border-[#30363d] rounded-lg overflow-hidden">
+    <div className="border border-[var(--surface-border)] rounded-lg overflow-hidden">
       <div
         className="font-mono text-sm [&_.d2h-file-wrapper]:border-0"
         dangerouslySetInnerHTML={{ __html: diffHtml }}

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Header } from "@/components/layout/header";
 import { ResumeCard } from "@/components/home/resume-card";
 import { NewResumeDialog } from "@/components/home/new-resume-dialog";
+import { CommitHeatmap } from "@/components/home/commit-heatmap";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUserId } from "@/hooks/use-user-id";
 import { useResumes } from "@/hooks/use-resumes";
@@ -17,6 +18,7 @@ export default function HomePage() {
   const router = useRouter();
   const [commitCounts, setCommitCounts] = useState<Record<string, number>>({});
   const [lastUpdated, setLastUpdated] = useState<Record<string, string>>({});
+  const [allCommitDates, setAllCommitDates] = useState<string[]>([]);
 
   const fetchMeta = useCallback(async () => {
     if (resumes.length === 0) return;
@@ -41,6 +43,14 @@ export default function HomePage() {
     }
     setCommitCounts(counts);
     setLastUpdated(updated);
+
+    const resumeIds = resumes.map((r) => r.id);
+    const { data: allCommits } = await supabase
+      .from("commits")
+      .select("created_at")
+      .in("resume_id", resumeIds)
+      .order("created_at", { ascending: false });
+    setAllCommitDates((allCommits || []).map((c) => c.created_at));
   }, [resumes]);
 
   useEffect(() => {
@@ -65,30 +75,36 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#171717]">
+    <div className="min-h-screen bg-[var(--surface-bg)]">
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-[#ededed]">Your Resumes</h1>
-            <p className="text-sm text-[#a1a1a1] mt-1">
+            <h1 className="text-2xl font-bold text-[var(--surface-text)]">Your Resumes</h1>
+            <p className="text-sm text-[var(--surface-text-secondary)] mt-1">
               Version-controlled LaTeX resumes with Git-like operations
             </p>
           </div>
           <NewResumeDialog onCreate={handleCreate} />
         </div>
 
+        {allCommitDates.length > 0 && (
+          <div className="mb-6">
+            <CommitHeatmap commitDates={allCommitDates} />
+          </div>
+        )}
+
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-40 bg-[#1c1c1c]" />
+              <Skeleton key={i} className="h-40 bg-[var(--surface-card)]" />
             ))}
           </div>
         ) : resumes.length === 0 ? (
           <div className="text-center py-20">
-            <FileText size={48} className="mx-auto text-[#2e2e2e] mb-4" />
-            <h2 className="text-lg font-medium text-[#a1a1a1] mb-2">No resumes yet</h2>
-            <p className="text-sm text-[#6b6b6b] mb-6">
+            <FileText size={48} className="mx-auto text-[var(--surface-border)] mb-4" />
+            <h2 className="text-lg font-medium text-[var(--surface-text-secondary)] mb-2">No resumes yet</h2>
+            <p className="text-sm text-[var(--surface-text-muted)] mb-6">
               Create your first resume to get started
             </p>
             <NewResumeDialog onCreate={handleCreate} />
