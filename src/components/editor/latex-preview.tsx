@@ -17,12 +17,41 @@ export function LatexPreview({ source }: LatexPreviewProps) {
   );
 }
 
+/** Find the matching closing brace starting at position `start` (which should point to the opening `{`).
+ *  Returns the index after the closing `}`, or -1 if not found. */
+function findMatchingBrace(str: string, start: number): number {
+  if (str[start] !== "{") return -1;
+  let depth = 1;
+  let i = start + 1;
+  while (i < str.length && depth > 0) {
+    if (str[i] === "{" && str[i - 1] !== "\\") depth++;
+    if (str[i] === "}" && str[i - 1] !== "\\") depth--;
+    i++;
+  }
+  return depth === 0 ? i : -1;
+}
+
+/** Extract N brace-delimited arguments after a position in str.
+ *  Returns null if not enough args found, otherwise { args: string[], endIndex: number } */
+function extractArgs(str: string, pos: number, numArgs: number): { args: string[]; endIndex: number } | null {
+  const args: string[] = [];
+  let i = pos;
+  for (let a = 0; a < numArgs; a++) {
+    // skip whitespace
+    while (i < str.length && /\s/.test(str[i])) i++;
+    if (i >= str.length || str[i] !== "{") return null;
+    const end = findMatchingBrace(str, i);
+    if (end === -1) return null;
+    args.push(str.slice(i + 1, end - 1));
+    i = end;
+  }
+  return { args, endIndex: i };
+}
+
 function parseLatexToHtml(source: string): string {
   // ── Step 1: Expand user-defined \newcommand macros ──
-  // Collect \newcommand definitions and remove them from source
   const macros: { name: string; numArgs: number; body: string }[] = [];
 
-  // Match \newcommand{\name}[numArgs]{body}  (handles nested braces for body)
   let macroSource = source;
   const newCmdRegex = /\\newcommand\{\\([a-zA-Z]+)\}(?:\[(\d)\])?\{/g;
   let m: RegExpExecArray | null;
@@ -31,7 +60,6 @@ function parseLatexToHtml(source: string): string {
   while ((m = newCmdRegex.exec(macroSource)) !== null) {
     const name = m[1];
     const numArgs = m[2] ? parseInt(m[2]) : 0;
-    // Find the matching closing brace for the body
     const bodyStart = m.index + m[0].length;
     let depth = 1;
     let i = bodyStart;
@@ -45,12 +73,11 @@ function parseLatexToHtml(source: string): string {
     indicesToRemove.push([m.index, i]);
   }
 
-  // Remove \newcommand definitions from source (reverse order to preserve indices)
   for (let idx = indicesToRemove.length - 1; idx >= 0; idx--) {
     macroSource = macroSource.slice(0, indicesToRemove[idx][0]) + macroSource.slice(indicesToRemove[idx][1]);
   }
 
-  // Also handle \renewcommand the same way
+  // Also handle \renewcommand
   const renewCmdRegex = /\\renewcommand\{\\([a-zA-Z]+)\}(?:\[(\d)\])?\{/g;
   const renewIndicesToRemove: [number, number][] = [];
   while ((m = renewCmdRegex.exec(macroSource)) !== null) {
@@ -70,26 +97,54 @@ function parseLatexToHtml(source: string): string {
 
   source = macroSource;
 
-  // Now expand macros in the source — do multiple passes for nested macros
-  for (let pass = 0; pass < 4; pass++) {
+  // Expand macros — use proper brace-matching for arguments
+  for (let pass = 0; pass < 6; pass++) {
     for (const macro of macros) {
       if (macro.numArgs === 0) {
+        // Zero-arg macro: simple text replacement
         source = source.split("\\" + macro.name).join(macro.body);
       } else {
-        // Build a regex that captures the right number of brace-delimited args
-        const escapedName = macro.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const argPattern = "\\{([^}]*)\\}".repeat(macro.numArgs);
-        const regex = new RegExp("\\\\" + escapedName + "\\s*" + argPattern, "g");
-        source = source.replace(regex, (...args) => {
-          let result = macro.body;
-          for (let a = 0; a < macro.numArgs; a++) {
-            result = result.split("#" + (a + 1)).join(args[a + 1] || "");
+        // Macro with args: find each occurrence and extract brace-delimited args
+        let result = "";
+        let searchFrom = 0;
+        const pattern = "\\" + macro.name;
+        while (true) {
+          const idx = source.indexOf(pattern, searchFrom);
+          if (idx === -1) {
+            result += source.slice(searchFrom);
+            break;
           }
-          return result;
-        });
+          // Make sure it's not part of a longer command name
+          const afterCmd = idx + pattern.length;
+          if (afterCmd < source.length && /[a-zA-Z]/.test(source[afterCmd])) {
+            result += source.slice(searchFrom, afterCmd);
+            searchFrom = afterCmd;
+            continue;
+          }
+          result += source.slice(searchFrom, idx);
+          const extracted = extractArgs(source, afterCmd, macro.numArgs);
+          if (extracted) {
+            let expanded = macro.body;
+            for (let a = 0; a < macro.numArgs; a++) {
+              // Use a regex replacement to ensure \small#1 becomes \small ARG (with space)
+              const paramToken = "#" + (a + 1);
+              expanded = expanded.split(paramToken).join(extracted.args[a]);
+            }
+            result += expanded;
+            searchFrom = extracted.endIndex;
+          } else {
+            // Couldn't extract args, leave the command as-is
+            result += pattern;
+            searchFrom = afterCmd;
+          }
+        }
+        source = result;
       }
     }
   }
+
+  // Fix \small/\tiny/etc. concatenated with text (e.g. \smallBachelor → \small Bachelor)
+  source = source.replace(/\\(small|tiny|footnotesize|scriptsize|normalsize|large|Large|LARGE|huge|Huge)([A-Z])/g, "\\$1 $2");
 
   // Extract content between the LAST \begin{document} and \end{document}
   const docMatches = [...source.matchAll(/\\begin\{document\}/g)];
@@ -105,7 +160,7 @@ function parseLatexToHtml(source: string): string {
   // Remove comments
   content = content.replace(/%.*$/gm, "");
 
-  // Strip preamble commands that might leak through
+  // Strip preamble commands
   content = content.replace(/\\documentclass(\[.*?\])?\{[^}]*\}/g, "");
   content = content.replace(/\\usepackage(\[.*?\])?\{[^}]*\}/g, "");
   content = content.replace(/\\setlength\{[^}]*\}\{[^}]*\}/g, "");
@@ -122,20 +177,21 @@ function parseLatexToHtml(source: string): string {
   content = content.replace(/\\urlstyle\{[^}]*\}/g, "");
   content = content.replace(/\\raggedbottom/g, "");
   content = content.replace(/\\raggedright/g, "");
-  content = content.replace(/\\setlength\{[^}]*\}\{[^}]*\}/g, "");
   content = content.replace(/\\fancyhf\{[^}]*\}/g, "");
   content = content.replace(/\\fancyfoot\{?\}?/g, "");
-
-  // Remove \begin{document} / \end{document} leaks
   content = content.replace(/\\begin\{document\}/g, "");
   content = content.replace(/\\end\{document\}/g, "");
 
   // ── Environments ──
 
-  // center
+  // center — process \\ line breaks and \vspace inside
   content = content.replace(
     /\\begin\{center\}([\s\S]*?)\\end\{center\}/g,
-    (_, inner) => `<div style="text-align:center">${inner}</div>`
+    (_, inner) => {
+      inner = inner.replace(/\\\\(\[\d+[a-z]*\])?/g, "<br/>");
+      inner = inner.replace(/\\vspace\*?\{[^}]*\}/g, "");
+      return `<div style="text-align:center">${processInline(inner)}</div>`;
+    }
   );
 
   // figure
@@ -153,40 +209,50 @@ function parseLatexToHtml(source: string): string {
     (_, _opts, inner) => `<div style="margin:12px 0">${inner}</div>`
   );
 
-  // tabular / tabular*
+  // tabular / tabular* — process these BEFORE itemize so expanded macro content works
+  content = processAllTabulars(content);
+
+  // Process lists from innermost outward to handle nesting properly
+  // Tag resume-style lists (label={}) so we can treat them differently
   content = content.replace(
-    /\\begin\{tabular\*?\}(?:\{[^}]*\})?(?:\[[^\]]*\])?(?:\{[^}]*\})?([\s\S]*?)\\end\{tabular\*?\}/g,
-    (_, inner) => {
-      const rows = inner.split(/\\\\\s*(?:\[.*?\])?/).filter((r: string) => r.trim() && !r.trim().startsWith("\\hline"));
-      const tableRows = rows.map((row: string) => {
-        const cells = row.split(/&/).map((c: string) => {
-          let cell = c.trim().replace(/\\hline/g, "").replace(/\\cline\{[^}]*\}/g, "");
-          // strip @{...} column specs that leak
-          cell = cell.replace(/@\{[^}]*\}/g, "");
-          const multicolMatch = cell.match(/\\multicolumn\{(\d+)\}\{[^}]*\}\{([\s\S]*)\}/);
-          if (multicolMatch) {
-            return `<td colspan="${multicolMatch[1]}" style="padding:2px 4px">${processInline(multicolMatch[2].trim())}</td>`;
-          }
-          return `<td style="padding:2px 4px">${processInline(cell)}</td>`;
-        });
-        return `<tr>${cells.join("")}</tr>`;
-      });
-      return `<table style="border-collapse:collapse;margin:4px 0;width:100%">${tableRows.join("")}</table>`;
-    }
+    /\\begin\{itemize\}\[leftmargin[^\]]*label\s*=\s*\{\}\]/g,
+    "\\begin{resumelist}"
   );
 
-  // itemize
-  content = content.replace(
-    /\\begin\{itemize\}(\[.*?\])?([\s\S]*?)\\end\{itemize\}/g,
-    (_, _opts, inner) => {
-      const items = inner
-        .split(/\\item\s*/)
-        .filter((s: string) => s.trim())
-        .map((s: string) => `<li style="margin-bottom:2px;font-size:10pt">${processInline(s.trim())}</li>`)
-        .join("");
-      return `<ul style="margin:2px 0;padding-left:18px;list-style-type:disc">${items}</ul>`;
-    }
-  );
+  // Process all itemize environments innermost-first using a loop
+  for (let pass = 0; pass < 10; pass++) {
+    const before = content;
+
+    // Process innermost regular itemize (ones with no nested \begin{itemize} inside)
+    content = content.replace(
+      /\\begin\{itemize\}(\[.*?\])?((?:(?!\\begin\{itemize\}|\\begin\{resumelist\})[\s\S])*?)\\end\{itemize\}/g,
+      (_, _opts, inner) => {
+        let cleaned = inner.replace(/\\vspace\*?\{[^}]*\}/g, "");
+        const items = cleaned
+          .split(/\\item\s*/)
+          .filter((s: string) => s.trim())
+          .map((s: string) => `<li style="margin-bottom:1px;font-size:10pt">${processInline(s.trim())}</li>`)
+          .join("");
+        return `<ul style="margin:2px 0;padding-left:18px;list-style-type:disc">${items}</ul>`;
+      }
+    );
+
+    // Process innermost resumelist (ones with no nested lists inside)
+    content = content.replace(
+      /\\begin\{resumelist\}((?:(?!\\begin\{itemize\}|\\begin\{resumelist\})[\s\S])*?)\\end\{itemize\}/g,
+      (_, inner) => {
+        let cleaned = inner.replace(/\\vspace\*?\{[^}]*\}/g, "");
+        const items = cleaned
+          .split(/\\item\s*/)
+          .filter((s: string) => s.trim())
+          .map((s: string) => `<div style="margin-bottom:4px">${s.trim()}</div>`)
+          .join("");
+        return `<div style="margin:0;padding:0">${items}</div>`;
+      }
+    );
+
+    if (content === before) break;
+  }
 
   // enumerate
   content = content.replace(
@@ -257,13 +323,13 @@ function parseLatexToHtml(source: string): string {
     (_, _opts, inner) => `<div style="display:inline-block;vertical-align:top">${processInline(inner)}</div>`
   );
 
-  // comment environment (hide contents)
+  // comment environment
   content = content.replace(
     /\\begin\{comment\}([\s\S]*?)\\end\{comment\}/g,
     ""
   );
 
-  // Strip any remaining unknown environments
+  // Strip remaining unknown environments
   content = content.replace(/\\begin\{[^}]*\}(\[.*?\])?(\{[^}]*\})?/g, "");
   content = content.replace(/\\end\{[^}]*\}/g, "");
 
@@ -309,27 +375,127 @@ function parseLatexToHtml(source: string): string {
   content = content.replace(/\\(?:maketitle|tableofcontents|makeatletter|makeatother|centering|raggedright|raggedleft)/g, "");
   content = content.replace(/\\(?:protect|relax|strut|null|phantom\{[^}]*\})/g, "");
   content = content.replace(/\\(?:parindent|parskip|baselineskip|lineskip)\s*[=]?\s*\d*[a-z]*/g, "");
+  content = content.replace(/\\color\{[^}]*\}/g, "");
+  content = content.replace(/\\titlerule/g, "");
 
-  // Strip remaining \command{arg}
+  // Strip \item that leaked from macro expansion (outside any list env)
+  content = content.replace(/\\item\s*/g, "");
+
+  // Strip remaining \command{arg} — but be careful not to strip HTML tags
   content = content.replace(/\\[a-zA-Z]+\{([^}]*)\}/g, "$1");
   // Strip remaining \command with no args
   content = content.replace(/\\[a-zA-Z]+/g, "");
 
+  // Clean up stray braces from macro expansion (groups like {text} → text)
+  // Use a function that properly handles nested braces and HTML content
+  content = cleanStrayBraces(content);
+
   // Clean excessive breaks
   content = content.replace(/(<br\s*\/?>){4,}/g, "<br/><br/>");
+
+  // Remove stray & that leaked from tabular
+  content = content.replace(/\s*&\s*(?=<br|$)/gm, "");
 
   return content.trim();
 }
 
+/** Process all tabular/tabular* environments, handling nested braces properly */
+function processAllTabulars(content: string): string {
+  // Handle tabular* first, then tabular
+  const tabularPattern = /\\begin\{tabular\*?\}/g;
+  let match;
+  let result = "";
+  let lastIndex = 0;
+
+  // Reset regex state
+  const allMatches: { index: number; isTabularStar: boolean }[] = [];
+  const regex = /\\begin\{(tabular\*?)\}/g;
+  while ((match = regex.exec(content)) !== null) {
+    allMatches.push({ index: match.index, isTabularStar: match[1] === "tabular*" });
+  }
+
+  // Process from last to first to avoid index shifting
+  for (let mi = allMatches.length - 1; mi >= 0; mi--) {
+    const m = allMatches[mi];
+    const startTag = m.isTabularStar ? "\\begin{tabular*}" : "\\begin{tabular}";
+    const endTag = m.isTabularStar ? "\\end{tabular*}" : "\\end{tabular}";
+
+    // Find the end of the opening tag (skip column specs)
+    let pos = m.index + startTag.length;
+    // Skip optional {width} and [alignment] and {column spec} args
+    while (pos < content.length) {
+      if (content[pos] === "{") {
+        const end = findMatchingBrace(content, pos);
+        if (end === -1) break;
+        pos = end;
+      } else if (content[pos] === "[") {
+        const bracketEnd = content.indexOf("]", pos);
+        if (bracketEnd === -1) break;
+        pos = bracketEnd + 1;
+      } else {
+        break;
+      }
+    }
+
+    // Find the matching \end{tabular*} or \end{tabular}
+    const endIdx = content.indexOf(endTag, pos);
+    if (endIdx === -1) continue;
+
+    const inner = content.slice(pos, endIdx);
+    const tableHtml = renderTabular(inner);
+
+    content = content.slice(0, m.index) + tableHtml + content.slice(endIdx + endTag.length);
+  }
+
+  return content;
+}
+
+function renderTabular(inner: string): string {
+  const rows = inner
+    .split(/\\\\\s*(?:\[.*?\])?\s*/)
+    .filter((r: string) => r.trim() && !r.trim().match(/^\\hline$/));
+
+  const tableRows = rows.map((row: string) => {
+    // Remove \hline, \cline
+    row = row.replace(/\\hline/g, "").replace(/\\cline\{[^}]*\}/g, "");
+    if (!row.trim()) return "";
+
+    // Protect escaped ampersands before splitting
+    row = row.replace(/\\&/g, "%%AMP%%");
+    const cells = row.split(/&/).map((c: string) => {
+      c = c.replace(/%%AMP%%/g, "\\&");
+      let cell = c.trim();
+      // strip @{...} column specs
+      cell = cell.replace(/@\{[^}]*\}/g, "");
+      const multicolMatch = cell.match(/\\multicolumn\{(\d+)\}\{[^}]*\}\{([\s\S]*)\}/);
+      if (multicolMatch) {
+        return `<td colspan="${multicolMatch[1]}" style="padding:2px 4px">${processInline(multicolMatch[2].trim())}</td>`;
+      }
+      return `<td style="padding:2px 4px">${processInline(cell)}</td>`;
+    });
+    return `<tr>${cells.join("")}</tr>`;
+  }).filter(Boolean);
+
+  return `<table style="border-collapse:collapse;margin:2px 0;width:100%">${tableRows.join("")}</table>`;
+}
+
 function processInline(text: string): string {
-  // \textbf{...}
-  text = text.replace(/\\textbf\{([^}]*)\}/g, "<strong>$1</strong>");
+  // Special combo: \textbf{\Huge \scshape ...} — must come before generic \textbf
+  text = text.replace(/\\textbf\{\\Huge\s*\\scshape\s+([^}]*)\}/g,
+    '<span style="font-size:26px;font-variant:small-caps;font-weight:bold">$1</span>');
+  text = text.replace(/\\textbf\{\\LARGE\s*\\scshape\s+([^}]*)\}/g,
+    '<span style="font-size:22px;font-variant:small-caps;font-weight:bold">$1</span>');
+  text = text.replace(/\\textbf\{\\Large\s+([^}]*)\}/g,
+    '<span style="font-size:18px;font-weight:bold">$1</span>');
+
+  // \textbf{...} — handle nested braces
+  text = replaceCommandWithBraces(text, "textbf", (arg) => `<strong>${arg}</strong>`);
   // \textit{...}
-  text = text.replace(/\\textit\{([^}]*)\}/g, "<em>$1</em>");
+  text = replaceCommandWithBraces(text, "textit", (arg) => `<em>${arg}</em>`);
   // \emph{...}
-  text = text.replace(/\\emph\{([^}]*)\}/g, "<em>$1</em>");
+  text = replaceCommandWithBraces(text, "emph", (arg) => `<em>${arg}</em>`);
   // \underline{...}
-  text = text.replace(/\\underline\{([^}]*)\}/g, "<u>$1</u>");
+  text = replaceCommandWithBraces(text, "underline", (arg) => `<u>${arg}</u>`);
   // \textsc{...}
   text = text.replace(/\\textsc\{([^}]*)\}/g, '<span style="font-variant:small-caps">$1</span>');
   // \texttt{...}
@@ -349,6 +515,9 @@ function processInline(text: string): string {
   text = text.replace(/\{\\LARGE\s*\\bfseries\s+([^}]*)\}/g, '<div style="font-size:22px;font-weight:bold">$1</div>');
   text = text.replace(/\{\\Large\s*\\bfseries\s+([^}]*)\}/g, '<div style="font-size:18px;font-weight:bold">$1</div>');
   text = text.replace(/\{\\large\s*\\bfseries\s+([^}]*)\}/g, '<div style="font-size:16px;font-weight:bold">$1</div>');
+
+  // {\textbf{\Huge \scshape Name}} — nested pattern from Jake's resume
+  text = text.replace(/\\textbf\{\\Huge\s*\\scshape\s+([^}]*)\}/g, '<div style="font-size:26px;font-variant:small-caps;font-weight:bold">$1</div>');
 
   // Size + scshape combos
   text = text.replace(/\{\\Huge\s+([^}]*)\}/g, '<div style="font-size:26px">$1</div>');
@@ -373,6 +542,9 @@ function processInline(text: string): string {
   text = text.replace(/\{\\scshape\s+([^}]*)\}/g, '<span style="font-variant:small-caps">$1</span>');
   text = text.replace(/\{\\sf\s+([^}]*)\}/g, '<span style="font-family:sans-serif">$1</span>');
   text = text.replace(/\{\\rm\s+([^}]*)\}/g, "$1");
+
+  // Standalone size switches (strip them, they just set font size contextually)
+  text = text.replace(/\\(?:small|tiny|footnotesize|scriptsize|normalsize|large|Large|LARGE|huge|Huge)\b\s*/g, "");
 
   // \href{url}{text}
   text = text.replace(
@@ -403,7 +575,7 @@ function processInline(text: string): string {
   text = text.replace(/\\epsfig\{[^}]*\}/g, '<span style="color:#999">[image]</span>');
   text = text.replace(/\\includegraphics(\[.*?\])?\{[^}]*\}/g, '<span style="color:#999">[image]</span>');
 
-  // \hfill
+  // \hfill — use flexbox approach
   text = text.replace(/\\hfill\s*/g, '<span style="float:right">');
   text = text.replace(/<span style="float:right">(.*?)(?=<br|<\/div|<\/td|$)/g, '<span style="float:right">$1</span>');
 
@@ -436,7 +608,7 @@ function processInline(text: string): string {
   text = text.replace(/''/g, "\u201D");
 
   // Inline math $...$ — render as italic
-  text = text.replace(/\$\|?\$\s*/g, " | "); // $|$ separator pattern common in resumes
+  text = text.replace(/\$\|?\$\s*/g, " | "); // $|$ separator
   text = text.replace(/\$([^$]+)\$/g, '<span style="font-style:italic;font-family:serif">$1</span>');
 
   // \title, \author, \date
@@ -448,6 +620,90 @@ function processInline(text: string): string {
   text = text.replace(/\\scshape\s*/g, "");
 
   return text;
+}
+
+/** Replace a \command{arg} where arg may contain nested braces */
+function replaceCommandWithBraces(text: string, cmd: string, replacer: (arg: string) => string): string {
+  const pattern = "\\" + cmd + "{";
+  let result = "";
+  let searchFrom = 0;
+
+  while (true) {
+    const idx = text.indexOf(pattern, searchFrom);
+    if (idx === -1) {
+      result += text.slice(searchFrom);
+      break;
+    }
+    result += text.slice(searchFrom, idx);
+    const braceStart = idx + pattern.length - 1; // points to the {
+    const braceEnd = findMatchingBrace(text, braceStart);
+    if (braceEnd === -1) {
+      result += pattern;
+      searchFrom = idx + pattern.length;
+      continue;
+    }
+    const arg = text.slice(braceStart + 1, braceEnd - 1);
+    result += replacer(arg);
+    searchFrom = braceEnd;
+  }
+  return result;
+}
+
+/** Remove stray { } braces that aren't part of HTML tags.
+ *  Works from innermost braces outward, skipping braces inside HTML attributes. */
+function cleanStrayBraces(text: string): string {
+  for (let pass = 0; pass < 6; pass++) {
+    const before = text;
+    let result = "";
+    let i = 0;
+    while (i < text.length) {
+      // Skip HTML tags entirely
+      if (text[i] === "<") {
+        const tagEnd = text.indexOf(">", i);
+        if (tagEnd !== -1) {
+          result += text.slice(i, tagEnd + 1);
+          i = tagEnd + 1;
+          continue;
+        }
+      }
+      // Found an opening brace — try to find its matching close
+      if (text[i] === "{") {
+        const closeIdx = findClosingBraceSkippingHtml(text, i);
+        if (closeIdx !== -1) {
+          // Replace { content } with just content
+          result += text.slice(i + 1, closeIdx);
+          i = closeIdx + 1;
+          continue;
+        }
+      }
+      result += text[i];
+      i++;
+    }
+    text = result;
+    if (text === before) break;
+  }
+  return text;
+}
+
+/** Find the matching } for a { at position `start`, skipping over HTML tags. */
+function findClosingBraceSkippingHtml(str: string, start: number): number {
+  let depth = 1;
+  let i = start + 1;
+  while (i < str.length && depth > 0) {
+    if (str[i] === "<") {
+      // Skip HTML tags
+      const tagEnd = str.indexOf(">", i);
+      if (tagEnd !== -1) {
+        i = tagEnd + 1;
+        continue;
+      }
+    }
+    if (str[i] === "{") depth++;
+    if (str[i] === "}") depth--;
+    if (depth === 0) return i;
+    i++;
+  }
+  return -1;
 }
 
 function escapeHtml(text: string): string {
