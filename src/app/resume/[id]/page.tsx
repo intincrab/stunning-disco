@@ -135,7 +135,7 @@ export default function EditorPage() {
       if (isDragging.current && containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         const percent = ((e.clientX - rect.left) / rect.width) * 100;
-        setPanelWidth(Math.min(80, Math.max(20, percent)));
+        setPanelWidth(Math.min(85, Math.max(15, percent)));
       }
       if (isHistoryDragging.current) {
         const fromRight = window.innerWidth - e.clientX;
@@ -434,8 +434,8 @@ export default function EditorPage() {
         >
           {/* Monaco Editor (normal) or DiffEditor (when change pending) */}
           <div
-            className="w-full h-[50vh] md:h-full border-b md:border-b-0 border-[var(--surface-border)]"
-            style={{ flex: `0 0 ${panelWidth}%` }}
+            className="h-[50vh] md:h-full border-b md:border-b-0 border-[var(--surface-border)] shrink-0"
+            style={{ width: `${panelWidth}%` }}
           >
             <MonacoEditor
               value={source}
@@ -444,16 +444,16 @@ export default function EditorPage() {
             />
           </div>
 
-          {/* Resize Handle */}
+          {/* Resize Handle - wider grab area for easier resizing */}
           <div
-            className="hidden md:flex items-center justify-center w-[6px] cursor-col-resize bg-[var(--surface-border)] hover:bg-[var(--accent-color)] active:bg-[var(--accent-color)] transition-colors group flex-shrink-0"
+            className="hidden md:flex items-center justify-center w-3 cursor-col-resize bg-[var(--surface-border)] hover:bg-[var(--accent-color)] active:bg-[var(--accent-color)] transition-colors group shrink-0"
             onMouseDown={handleMouseDown}
           >
-            <div className="w-[2px] h-8 rounded-full bg-[var(--surface-text-muted)] group-hover:bg-white group-active:bg-white transition-colors" />
+            <div className="w-[2px] h-10 rounded-full bg-[var(--surface-text-muted)] group-hover:bg-white group-active:bg-white transition-colors" />
           </div>
 
           {/* LaTeX Preview — always shows proposed version when diff mode is active */}
-          <div className="w-full h-[50vh] md:h-full overflow-auto bg-white flex-1 relative">
+          <div className="h-[50vh] md:h-full overflow-auto bg-white flex-1 min-w-0 relative">
             {pendingChange && (
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-100 text-amber-800 text-[10px] font-medium px-2 py-0.5 rounded-full border border-amber-300 shadow-sm pointer-events-none">
                 Previewing proposed changes

@@ -166,11 +166,11 @@ export function ChatPanel({
             <div className="w-6 h-6 rounded-lg bg-[var(--accent-color)]/15 flex items-center justify-center shrink-0">
               <Sparkle size={12} weight="fill" className="text-[var(--accent-color)] animate-pulse" />
             </div>
-            <div className="bg-[var(--accent-color)]/5 border border-[var(--accent-color)]/15 rounded-xl px-3 py-2.5">
-              <div className="flex gap-1 items-center">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-color)]/60 animate-[bounce_1s_infinite_0ms]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-color)]/60 animate-[bounce_1s_infinite_150ms]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-color)]/60 animate-[bounce_1s_infinite_300ms]" />
+            <div className="bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-xl px-3.5 py-2.5 shadow-sm">
+              <div className="flex gap-1.5 items-center">
+                <span className="w-2 h-2 rounded-full bg-[var(--accent-color)] animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-2 h-2 rounded-full bg-[var(--accent-color)] animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-2 h-2 rounded-full bg-[var(--accent-color)] animate-bounce" style={{ animationDelay: "300ms" }} />
               </div>
             </div>
           </div>
