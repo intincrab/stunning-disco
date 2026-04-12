@@ -8,10 +8,11 @@ import { LatexPreview } from "@/components/editor/latex-preview";
 import { EditorToolbar } from "@/components/editor/editor-toolbar";
 import { CommitDialog } from "@/components/editor/commit-dialog";
 import { HistorySidebar } from "@/components/editor/history-sidebar";
+import { ChatPanel, type ChatMessage } from "@/components/editor/chat-panel";
 import { useResume } from "@/hooks/use-resume";
 import { useCommits } from "@/hooks/use-commits";
 import { Skeleton } from "@/components/ui/skeleton";
-import { GitCommit, ClockCounterClockwise, FloppyDisk } from "@phosphor-icons/react";
+import { GitCommit, ClockCounterClockwise, FloppyDisk, ChatCircle } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import type { Commit } from "@/types";
 
@@ -27,6 +28,11 @@ const MonacoEditor = dynamic(
   }
 );
 
+interface PendingChange {
+  original: string;
+  proposed: string;
+}
+
 export default function EditorPage() {
   const params = useParams();
   const router = useRouter();
@@ -40,6 +46,12 @@ export default function EditorPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [draftSaved, setDraftSaved] = useState(false);
+
+  // Chat panel state
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [pendingChange, setPendingChange] = useState<PendingChange | null>(null);
 
   // Resizable editor/preview panels
   const [panelWidth, setPanelWidth] = useState(40);
@@ -173,16 +185,12 @@ export default function EditorPage() {
     const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import("docx");
     const { saveAs } = await import("file-saver");
 
-    // Basic LaTeX → docx conversion
     let text = source;
-    // Extract document body
     const docMatch = text.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/);
     if (docMatch) text = docMatch[1];
 
-    // Remove comments
     text = text.replace(/%.*$/gm, "");
 
-    // Split into paragraphs
     const paragraphs: typeof Paragraph.prototype[] = [];
     const lines = text.split(/\n\n+/);
 
@@ -190,7 +198,6 @@ export default function EditorPage() {
       let cleaned = line.trim();
       if (!cleaned) continue;
 
-      // Check for section headings
       const sectionMatch = cleaned.match(/\\section\*?\{([^}]*)\}/);
       if (sectionMatch) {
         paragraphs.push(
@@ -215,7 +222,6 @@ export default function EditorPage() {
         continue;
       }
 
-      // Strip LaTeX commands for plain text
       cleaned = cleaned
         .replace(/\\textbf\{([^}]*)\}/g, "$1")
         .replace(/\\textit\{([^}]*)\}/g, "$1")
@@ -271,6 +277,84 @@ export default function EditorPage() {
     setShowHistory(!showHistory);
   };
 
+  // Chat handlers
+  const handleChatSend = useCallback(
+    async (message: string) => {
+      const userMsg: ChatMessage = {
+        id: `${Date.now()}-user`,
+        role: "user",
+        content: message,
+      };
+      setChatMessages((prev) => [...prev, userMsg]);
+      setChatLoading(true);
+
+      try {
+        const res = await fetch("/api/chat-edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ latex: source, message }),
+        });
+
+        const data = await res.json() as { explanation?: string; latex?: string; error?: string };
+
+        if (!res.ok || data.error) {
+          setChatMessages((prev) => [
+            ...prev,
+            {
+              id: `${Date.now()}-err`,
+              role: "assistant",
+              content: `Error: ${data.error ?? "Something went wrong. Please try again."}`,
+            },
+          ]);
+          return;
+        }
+
+        if (data.explanation && data.latex) {
+          setChatMessages((prev) => [
+            ...prev,
+            {
+              id: `${Date.now()}-ai`,
+              role: "assistant",
+              content: data.explanation!,
+            },
+          ]);
+          setPendingChange({ original: source, proposed: data.latex! });
+        }
+      } catch {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `${Date.now()}-err`,
+            role: "assistant",
+            content: "Network error. Please check your connection and try again.",
+          },
+        ]);
+      } finally {
+        setChatLoading(false);
+      }
+    },
+    [source]
+  );
+
+  const handleAccept = useCallback(() => {
+    if (!pendingChange) return;
+    setSource(pendingChange.proposed);
+    setPendingChange(null);
+    setCompileKey((k) => k + 1);
+    setChatMessages((prev) => [
+      ...prev,
+      { id: `${Date.now()}-sys`, role: "assistant", content: "Changes applied." },
+    ]);
+  }, [pendingChange]);
+
+  const handleReject = useCallback(() => {
+    setPendingChange(null);
+    setChatMessages((prev) => [
+      ...prev,
+      { id: `${Date.now()}-sys`, role: "assistant", content: "Changes discarded." },
+    ]);
+  }, []);
+
   if (loading) {
     return (
       <div className="h-screen bg-[var(--surface-bg)] flex flex-col">
@@ -287,7 +371,9 @@ export default function EditorPage() {
     ? !resume.stash_content.startsWith("__draft__")
     : false;
 
-  // h-screen + flex-col ensures the bottom bar is always visible
+  // The preview renders proposed latex when in diff mode, so the user sees the visual output
+  const previewSource = pendingChange ? pendingChange.proposed : source;
+
   return (
     <div className="h-screen flex flex-col bg-[var(--surface-bg)] overflow-hidden">
       <Header />
@@ -305,17 +391,56 @@ export default function EditorPage() {
       />
 
       <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Chat sidebar (toggle strip + panel) */}
+        <div
+          className="h-full bg-[#0d1117] border-r border-[var(--surface-border)] flex flex-row flex-shrink-0 transition-[width] duration-200"
+          style={{ width: showChat ? "30%" : "36px" }}
+        >
+          {/* Toggle button strip — always visible on the far left */}
+          <div className="w-9 flex flex-col items-center pt-3 flex-shrink-0">
+            <button
+              onClick={() => setShowChat((v) => !v)}
+              title={showChat ? "Close AI Chat" : "Open AI Chat"}
+              className={`p-1.5 rounded-md transition-colors ${
+                showChat
+                  ? "text-[var(--accent-color)] bg-[#0f2a1e]"
+                  : "text-[var(--surface-text-muted)] hover:text-[var(--surface-text)] hover:bg-[var(--surface-card)]"
+              }`}
+            >
+              <ChatCircle size={18} weight={showChat ? "fill" : "regular"} />
+            </button>
+          </div>
+
+          {/* Chat panel content — visible when open */}
+          {showChat && (
+            <div className="flex-1 min-w-0 border-l border-[#21262d] overflow-hidden">
+              <ChatPanel
+                messages={chatMessages}
+                loading={chatLoading}
+                hasPendingChange={pendingChange !== null}
+                onSend={handleChatSend}
+                onAccept={handleAccept}
+                onReject={handleReject}
+              />
+            </div>
+          )}
+        </div>
+
         {/* Main editor + preview area */}
         <div
           ref={containerRef}
-          className="flex-1 flex flex-col md:flex-row overflow-hidden"
+          className="flex-1 flex flex-col md:flex-row overflow-hidden min-w-0"
         >
-          {/* Monaco Editor - Left Panel */}
+          {/* Monaco Editor (normal) or DiffEditor (when change pending) */}
           <div
             className="w-full h-[50vh] md:h-full border-b md:border-b-0 border-[var(--surface-border)]"
             style={{ flex: `0 0 ${panelWidth}%` }}
           >
-            <MonacoEditor value={source} onChange={setSource} />
+            <MonacoEditor
+              value={source}
+              onChange={setSource}
+              pendingChange={pendingChange}
+            />
           </div>
 
           {/* Resize Handle */}
@@ -326,9 +451,14 @@ export default function EditorPage() {
             <div className="w-[2px] h-8 rounded-full bg-[var(--surface-text-muted)] group-hover:bg-white group-active:bg-white transition-colors" />
           </div>
 
-          {/* LaTeX Preview - Right Panel */}
-          <div className="w-full h-[50vh] md:h-full overflow-auto bg-white flex-1">
-            <LatexPreview key={compileKey} source={source} />
+          {/* LaTeX Preview — always shows proposed version when diff mode is active */}
+          <div className="w-full h-[50vh] md:h-full overflow-auto bg-white flex-1 relative">
+            {pendingChange && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-100 text-amber-800 text-[10px] font-medium px-2 py-0.5 rounded-full border border-amber-300 shadow-sm pointer-events-none">
+                Previewing proposed changes
+              </div>
+            )}
+            <LatexPreview key={compileKey} source={previewSource} />
           </div>
         </div>
 
@@ -359,7 +489,7 @@ export default function EditorPage() {
         )}
       </div>
 
-      {/* Bottom Bar — always visible, never scrolled away */}
+      {/* Bottom Bar */}
       <div className="h-8 bg-[var(--surface-card)] border-t border-[var(--surface-border)] flex items-center px-4 text-xs text-[var(--surface-text-secondary)] gap-4 shrink-0">
         <span className="font-medium text-[var(--surface-text)]">{resume?.name}</span>
         <span className="flex items-center gap-1">
@@ -375,6 +505,11 @@ export default function EditorPage() {
           <span className="flex items-center gap-1 text-[var(--accent-color)]">
             <FloppyDisk size={12} />
             Draft saved
+          </span>
+        )}
+        {pendingChange && (
+          <span className="flex items-center gap-1 text-amber-400">
+            Diff mode — pending review
           </span>
         )}
         <div className="flex-1" />
