@@ -183,7 +183,8 @@ export default function EditorPage() {
 
   const handleExportDocx = async () => {
     const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import("docx");
-    const { saveAs } = await import("file-saver");
+    const fileSaver = await import("file-saver");
+    const saveAs = fileSaver.default ?? fileSaver.saveAs;
 
     let text = source;
     const docMatch = text.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/);
@@ -393,7 +394,7 @@ export default function EditorPage() {
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Chat sidebar (toggle strip + panel) */}
         <div
-          className="h-full bg-[#0d1117] border-r border-[var(--surface-border)] flex flex-row flex-shrink-0 transition-[width] duration-200"
+          className="h-full bg-[var(--surface-bg)] border-r border-[var(--surface-border)] flex flex-row flex-shrink-0 transition-[width] duration-200"
           style={{ width: showChat ? "30%" : "36px" }}
         >
           {/* Toggle button strip — always visible on the far left */}
@@ -403,7 +404,7 @@ export default function EditorPage() {
               title={showChat ? "Close AI Chat" : "Open AI Chat"}
               className={`p-1.5 rounded-md transition-colors ${
                 showChat
-                  ? "text-[var(--accent-color)] bg-[#0f2a1e]"
+                  ? "text-[var(--accent-color)] bg-[var(--accent-color)]/10"
                   : "text-[var(--surface-text-muted)] hover:text-[var(--surface-text)] hover:bg-[var(--surface-card)]"
               }`}
             >
@@ -413,7 +414,7 @@ export default function EditorPage() {
 
           {/* Chat panel content — visible when open */}
           {showChat && (
-            <div className="flex-1 min-w-0 border-l border-[#21262d] overflow-hidden">
+            <div className="flex-1 min-w-0 border-l border-[var(--surface-border)] overflow-hidden">
               <ChatPanel
                 messages={chatMessages}
                 loading={chatLoading}

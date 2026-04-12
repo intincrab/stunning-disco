@@ -147,7 +147,7 @@ function parseLatexToHtml(source: string): string {
   source = source.replace(/\\(small|tiny|footnotesize|scriptsize|normalsize|large|Large|LARGE|huge|Huge)([A-Z])/g, "\\$1 $2");
 
   // Extract content between the LAST \begin{document} and \end{document}
-  const docMatches = [...source.matchAll(/\\begin\{document\}/g)];
+  const docMatches = Array.from(source.matchAll(/\\begin\{document\}/g));
   let content: string;
   if (docMatches.length > 0) {
     const lastBegin = docMatches[docMatches.length - 1].index! + docMatches[docMatches.length - 1][0].length;

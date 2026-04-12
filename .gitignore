@@ -53,7 +53,7 @@ coverage/
 .cache/
 .eslintcache
 .stylelintcache
-.tsbuildinfo
+*.tsbuildinfo
 
 # OS
 .DS_Store
